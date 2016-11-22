@@ -4,7 +4,7 @@ from threading import Thread, Lock
 
 
 def main():
-    print 'Hi'
+    print 'Server!'
 
 
 if __name__ == '__main__':
