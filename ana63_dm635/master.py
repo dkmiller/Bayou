@@ -119,7 +119,8 @@ def main():
             if debug:
                 subprocess.Popen([command, str(pid), sp2[2]])
             else:
-                subprocess.Popen([command, str(pid), sp2[2]], stdout=open('/dev/null'), stderr=open('/dev/null'))
+                print command
+                subprocess.Popen([command, str(pid), sp2[2]])
             # sleep for a while to allow the process be ready
             time.sleep(1)
             # connect to the port of the pid
