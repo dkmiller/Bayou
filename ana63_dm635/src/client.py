@@ -20,9 +20,22 @@ class MasterHandler(Thread):
         while self.valid:
             if '\n' in self.buffer:
                 (line, rest) = self.buffer.split('\n', 1)
+                LOG.debug('%d: client got \'%s\'' % (self.index, line))
                 self.buffer = rest
-                # TODO: do something with line
-                LOG.debug('%d: server received \'%s\'' % (self.index, line))
+                line = line.split()
+                if 'add' == line[0]:
+                    songName = line[1]
+                    URL = line[2]
+                    s_id = int(line[3])
+                    # TODO: add the song
+                elif 'delete' == line[0]:
+                    songName = line[1]
+                    s_id = int(line[2])
+                    # TODO: delete the song
+                elif 'get' == line[0]:
+                    songName = line[1]
+                    s_id = int(line[2])
+                    # TODO: get the URL
             else:
                 try:
                     data = self.conn.recv(1024)

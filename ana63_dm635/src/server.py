@@ -22,8 +22,20 @@ class MasterHandler(Thread):
             if '\n' in self.buffer:
                 (line, rest) = self.buffer.split('\n', 1)
                 self.buffer = rest
-                # TODO: do something with line
                 LOG.debug('%d: server received \'%s\'' % (self.index, line))
+                line = line.split()
+                if 'createConn' == line[0]:
+                    s_ids = map(int, line[1:])
+                    # TODO: create connections.
+                elif 'breakConn' == line[0]:
+                    s_ids = map(int, line[1:])
+                    # TODO: break connections.
+                elif 'retire' == line[0]:
+                    # TODO: retire.
+                    pass
+                elif 'printLog' == line[0]:
+                    # TODO: print log.
+                    pass
             else:
                 try:
                     data = self.conn.recv(1024)
