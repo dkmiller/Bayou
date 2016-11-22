@@ -40,7 +40,7 @@ def main():
     port = int(sys.argv[2])
 
     LOG.basicConfig(filename='LOG/%d.log' % pid, level=LOG.DEBUG)
-    LOG.debug('%d: server started' % pid)
+    LOG.debug('%d: server.main()' % pid)
 
 
     mhandler = MasterHandler(pid, address, port)
