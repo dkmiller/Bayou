@@ -6,6 +6,14 @@ from threading import Thread, Lock
 
 address = 'localhost'
 
+class ClientHandler(Thread):
+    def __init__(self, index, address, port):
+        Thread.__init__(self)
+        self.index = index
+        LOG.debug('%d: server.ClientHandler()' % self.index)
+    def run():
+        LOG.debug('%d: server.ClientHandler.run()' % self.index)
+
 class MasterHandler(Thread):
     def __init__(self, index, address, port):
         Thread.__init__(self)
@@ -16,6 +24,7 @@ class MasterHandler(Thread):
         self.sock.listen(1)
         self.conn, self.addr = self.sock.accept()
         self.valid = True
+        LOG.debug('%d: server.MasterHandler()' % self.index)
 
     def run(self):
         while self.valid:
@@ -45,6 +54,15 @@ class MasterHandler(Thread):
                     self.conn.close()
                     break
 
+class ServerHandler(Thread):
+    def __init__(self, index, address, port):
+        Thread.__init__(self)
+        self.index = index
+        LOG.debug('%d: server.ServerHandler()' % self.index)
+    def run():
+        LOG.debug('%d: server.ServerHandler.run()' % self.index)
+        # TODO: do something.
+
 def main():
     global address
 
@@ -54,8 +72,11 @@ def main():
     LOG.basicConfig(filename='LOG/%d.log' % pid, level=LOG.DEBUG)
     LOG.debug('%d: server.main()' % pid)
 
-
+    chandler = ClientHandler(pid, address, port)
+    shandler = ServerHandler(pid, address, port)
     mhandler = MasterHandler(pid, address, port)
+    chandler.start()
+    shandler.start()
     mhandler.start()
 
     LOG.debug('%d: server.main ended' % pid)

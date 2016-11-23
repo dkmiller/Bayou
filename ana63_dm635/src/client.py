@@ -15,6 +15,7 @@ class MasterHandler(Thread):
         self.sock.listen(1)
         self.conn, self.addr = self.sock.accept()
         self.valid = True
+        LOG.debug('%d: client.MasterHandler()' % self.index)
 
     def run(self):
         while self.valid:
@@ -45,6 +46,15 @@ class MasterHandler(Thread):
                     self.conn.close()
                     break
 
+class ServerHandler(Thread):
+    def __init__(self, index, address, port):
+        Thread.__init__(self)
+        self.index = index
+        LOG.debug('%d: client.ServerHandler()' % self.index)
+    def run():
+        LOG.debug('%d: client.ServerHandler.run()' % self.index)
+        # TODO: do something
+
 def main():
     global address
 
@@ -54,7 +64,9 @@ def main():
     LOG.basicConfig(filename='LOG/%d.log' % pid, level=LOG.DEBUG)
     LOG.debug('%d: client.main()' % pid)
 
+    shandler = ServerHandler(pid, address, port)
     mhandler = MasterHandler(pid, address, port)
+    shandler.start()
     mhandler.start()
 
     LOG.debug('%d: client.main ended' % pid)
