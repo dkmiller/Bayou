@@ -3,7 +3,6 @@
 The master program for CS5414 Bayou project.
 """
 
-import platform
 import sys, os
 import subprocess
 import time
@@ -117,10 +116,10 @@ def main():
             port = int(sp2[2])
             # start the process
             command = './' + cmd[5:].lower()
-            if platform.system() == 'Windows':
-                subprocess.Popen(['python.exe', 'src/' + cmd[5:].lower() + '.py', str(pid), str(sp2[2])])
-            else:
+            if debug:
                 subprocess.Popen([command, str(pid), sp2[2]])
+            else:
+                subprocess.Popen([command, str(pid), sp2[2]], stdout=open('/dev/null'), stderr=open('/dev/null'))
             # sleep for a while to allow the process be ready
             time.sleep(1)
             # connect to the port of the pid
@@ -132,6 +131,7 @@ def main():
                 send(pid, sp1[1], set_wait=True)
             else: # other commands
                 send(pid, sp1[1], set_wait=False)
+        time.sleep(1)
 
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == 'debug':
