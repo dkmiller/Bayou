@@ -138,6 +138,7 @@ def main():
     while True:
         # Initiate anti-entropy with all connections
         message = '%d:anti-entropy:%s' % (index, V(log))
+        LOG.debug('%d: server.main: connections = %s' % (index, connections))
         for pid in connections:
             sendServer(address, pid, message)
         # Wait a bit before conducting anti-entropy again.
