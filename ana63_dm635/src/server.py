@@ -19,7 +19,13 @@ class ClientServerHandler(Thread):
         self.sock = socket(AF_INET, SOCK_STREAM)
         self.sock.bind((address, 20000+self.index))
         self.sock.listen(1)
+        self.timer = -1
         LOG.debug('%d: server.ClientHandler()' % self.index)
+
+    def accept_stamp(self):
+        self.timer += 1
+        return (self.index, self.timer)
+
     def run(self):
         LOG.debug('%d: server.ClientHandler.run()' % self.index)
         while True:
@@ -36,6 +42,40 @@ class ClientServerHandler(Thread):
                         sender_id = int(line[0])
                         vv = literal_eval(line[2])
                         anti_entropy(self.connections, self.log, self.index, sender_id, vv)
+                    elif match('^d+:connect', line):
+                        s_id = int(line.split(':')[0])
+                        self.connections.add(s_id)
+                    elif match('^d:create', line):
+                        s_id = int(line.split(':')[0])
+                        self.connections.add(s_id)
+                        self.log_entry('CREATE', s_id, False)
+                    elif match('^\d+:disconnect', line):
+                        s_id = int(line.split(':')[0])
+                        self.connections.discard(s_id)
+                    elif match('^\d+:retire', line):
+                        s_id = int(line.split(':')[0])
+                        self.connections.discard(s_id)
+                        self.log_entry('RETIRE', s_id, False)
+                    elif match('^d:add:', line):
+                        line = line.split(':')
+                        song_name = line[2]
+                        URL = line[3]
+                        self.log_entry('PUT', song_name + ',' + URL, False)
+                    elif match('^d:delete', line):
+                        line = line.split(':')
+                        song_name = line[2]
+                        self.log_entry('DELETE', song_name, False)
+                    elif match('^d:get:', line):
+                        line = line.split(':')
+                        c_id = int(line[0])
+                        song_name = line[2]
+                        state = current_state(self.log)
+                        if song_name in state:
+                            URL = state[song_name]
+                            message = '%d:%s:%s' % (self.index, song_name, URL)
+                        else:
+                            message = '%d:%s:ERR_DEP' % (self.index, song_name)
+                        sendClient(self_address, c_id, message)
                 else:
                     try:
                         buff += conn.recv(1024)
@@ -44,22 +84,38 @@ class ClientServerHandler(Thread):
                         valid = False
                         conn.close()
                         break
+    def log_entry(self, op_type, op_value, stable_bool):
+        self.log.append({
+            'OP_TYPE': op_type,
+            'OP_VALUE': op_value,
+            'STABLE_BOOL': stable_bool,
+            'ACCT_STAMP': self.accept_stamp()
+        })
+
+def current_state(log):
+    result = {}
+    for log_entry in log:
+        if log_entry['OP_TYPE'] == 'PUT':
+            song_name, URL = log_entry['OP_VALUE'].split(',')
+            result[song_name] = URL
+        elif log_entry['OP_TYPE'] == 'DELETE':
+            song_name = log_entry['OP_VALUE']
 
 # send a message to a client
-def sendClient(address, pid, message):
+def sendClient(address, c_id, message):
     try:
         sock = socket(AF_INET, SOCK_STREAM)
-        sock.connect((address, 21000+pid))
+        sock.connect((address, 21000 + c_id))
         sock.send(str(message) + '\n')
         sock.close()
     except Exception as msg:
         LOG.debug('server send ERROR: ' + str(msg))
 
 # send a message to a server
-def sendServer(address, pid, message):
+def sendServer(address, s_id, message):
     try:
         sock = socket(AF_INET, SOCK_STREAM)
-        sock.connect((address, 20000+pid))
+        sock.connect((address, 20000 + s_id))
         sock.send(str(message) + '\n')
         sock.close()
     except Exception as msg:
@@ -69,6 +125,7 @@ def sendServer(address, pid, message):
 class MasterHandler(Thread):
     def __init__(self, index, address, port, connections, log):
         Thread.__init__(self)
+        self.address = address
         self.buffer = ''
         self.connections = connections
         self.index = index
@@ -90,9 +147,15 @@ class MasterHandler(Thread):
                 if 'createConn' == line[0]:
                     s_ids = map(int, line[1:])
                     self.connections |= set(s_ids)
+                    message = '%d:connect' % self.index
+                    for s_id in s_ids:
+                        sendServer(self.address, s_id, message)
                 elif 'breakConn' == line[0]:
                     s_ids = map(int, line[1:])
-                    # TODO: break connections.
+                    self.connections -= set(s_ids)
+                    message = '%d:disconnect' % self.index
+                    for s_id in s_ids:
+                        sendServer(self.address, s_id, message)
                 elif 'retire' == line[0]:
                     # TODO: retire.
                     pass
@@ -116,7 +179,9 @@ def anti_entropy(connections, log, pid, s_id, vv):
     connections.add(s_id)
 
 def V(log):
-    return {-1: 'TODO'}
+    result = {}
+    for log_entry in log:
+        pass
 
 def main():
     address = 'localhost'
