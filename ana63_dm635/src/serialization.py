@@ -26,21 +26,31 @@ def client_message(c_id, seq_no, write_type, song_name, url):
 
 ## SERVER CODE.
 
+# Server should call this to serialize a 'initiate anti-entropy' message.
+def server_anti_entropy(s_index, s_id, version_vector):
+    return server_message(s_index, s_id, 'anti-entropy', version_vector)
+
 # Server should call this to serialize a 'connect to me' message.
-def server_connect():
-    pass
+def server_connect(s_index, s_id):
+    return server_message(s_index, s_id, 'connect', None)
 
-def server_disconnect():
-    pass
+# Server should call this to serialize a 'disconnect with me' message.
+def server_disconnect(s_index, s_id):
+    return server_message(s_index, s_id, 'disconnect', None)
 
-def server_elect():
-    pass
+# Primary should call this to serialize a 'you are now primary' message.
+def server_elect(s_index, s_id):
+    return server_message(s_index, s_id, 'ur-elected', None)
 
-def server_log():
-    pass
+# Server should call this to serialize a 'response with log' message.
+def server_log(s_index, s_id, log):
+    return server_message(s_index, s_id, 'ae-log', log)
 
-def server_serialize(s_id, s_index, **keywords):
-    pass
+def server_message(s_index, s_id, m_type, stuff):
+    message = '%s:%d:%s:%s' % ('server', s_index, s_id, m_type)
+    if stuff is not None:
+        message += ':%s' % stuff
+    return message
 
 # Call this to get an object representing the deserialized state of a message. 
 class ServerDeserialize:
@@ -55,5 +65,12 @@ class ServerDeserialize:
             elif self.action_type in ['add']:
                 self.song_name, self.URL = rest.split(':',1)
         elif self.sender_type == 'server':
-            pass
+            self.sender_index, self.sender_id, self.message_type = rest.split(':',2)
+            self.sender_index = int(self.sender_index)
+            if self.message_type not in ['connect', 'disconnect', 'ur-elected']:
+                self.message_type, rest = rest.split(':',3)[2:]
+                if self.message_type == 'anti-entropy':
+                    self.version_vector = literal_eval(rest)
+                elif self.message_type == 'ae-log':
+                    self.log = literal_eval(rest)
 
