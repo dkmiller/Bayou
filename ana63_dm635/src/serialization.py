@@ -5,7 +5,6 @@ DELETE = 'delete'
 GET = 'get'
 
 ANTI_ENTROPY = 'anti-entropy'
-ANTI_ENTROPY_LOG = 'anti-entropy-log'
 CONNECT = 'connect'
 DISCONNECT = 'disconnect'
 UR_ELECTED = 'ur-elected'
@@ -24,7 +23,7 @@ def client_get(c_id, seq_no, song_name):
 # Client should call this to deserialize a message from a server. 
 class ClientDeserialize:
     def __init__(self, message):
-        pass
+        self.action_type, self.song_name, self.url = message.split(':',2)
 
 # Client should not call this!
 def client_message(c_id, seq_no, write_type, song_name, url):
@@ -35,10 +34,6 @@ def client_message(c_id, seq_no, write_type, song_name, url):
 
 
 ## SERVER CODE.
-
-# Server should call this to serialize a 'initiate anti-entropy' message.
-def server_anti_entropy(s_index, s_id, version_vector):
-    return server_message(s_index, s_id, ANTI_ENTROPY, version_vector)
 
 # Server should call this to serialize a 'connect to me' message.
 def server_connect(s_index, s_id):
@@ -52,9 +47,12 @@ def server_disconnect(s_index, s_id):
 def server_elect(s_index, s_id):
     return server_message(s_index, s_id, UR_ELECTED, None)
 
-# Server should call this to serialize a 'response with log' message.
-def server_log(s_index, s_id, log):
-    return server_message(s_index, s_id, ANTI_ENTROPY_LOG, log)
+def server_client_response(action_type, song_name, url):
+    return '%s:%s:%s' % (action_type, song_name, url)
+
+# Server should call this to serialize its logs to send to another server.
+def server_logs(s_index, s_id, log_com, log_ten):
+    return server_message(s_index, s_id, ANTI_ENTROPY, {'committed': log_com, 'tentative': log_ten})
 
 def server_message(s_index, s_id, m_type, stuff):
     message = '%s:%d:%s:%s' % ('server', s_index, s_id, m_type)
@@ -80,7 +78,5 @@ class ServerDeserialize:
             if self.message_type not in [CONNECT, DISCONNECT, UR_ELECTED]:
                 self.message_type, rest = rest.split(':',3)[2:]
                 if self.message_type == ANTI_ENTROPY:
-                    self.version_vector = literal_eval(rest)
-                elif self.message_type == ANTI_ENTROPY_LOG:
-                    self.log = literal_eval(rest)
+                    self.logs = literal_eval(rest)
 
