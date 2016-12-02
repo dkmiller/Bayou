@@ -5,9 +5,11 @@ import serialization
 from threading import Thread, Lock
 
 root_port21k = 21000
+root_port20k = 20000
 address = 'localhost'
 mHandler = None
 client_counter = 0
+global_flag = True
 
 class MasterHandler(Thread):
     def __init__(self, index, address, port):
@@ -23,54 +25,57 @@ class MasterHandler(Thread):
 
     def run(self):
         while self.valid:
-            if '\n' in self.buffer:
-                (line, rest) = self.buffer.split('\n', 1)
-                LOG.debug('%d: client got \'%s\'' % (self.index, line))
-                self.buffer = rest
-                line = line.split()
-                if 'add' == line[0]:
-                    songName = line[1]
-                    URL = line[2]
-                    s_id = int(line[3])
-                    ## Send add song to the server
-                    
-                    # increment the seq_no
-                    client_counter++
-                    # get msg payload
-                    msg = client_add(self.index, client_counter, songName, URL)
-                    # send msg to server
-                    send(s_id, msg)
+            if global_flag:
+                if '\n' in self.buffer:
+                    (line, rest) = self.buffer.split('\n', 1)
+                    LOG.debug('%d: client got \'%s\'' % (self.index, line))
+                    self.buffer = rest
+                    line = line.split()
+                    if 'add' == line[0]:
+                        songName = line[1]
+                        URL = line[2]
+                        s_id = int(line[3])
+                        ## Send add song to the server
+                        
+                        # increment the seq_no
+                        client_counter++
+                        # get msg payload
+                        msg = client_add(self.index, client_counter, songName, URL)
+                        # send msg to server
+                        send(s_id, msg)
+                        global_flag = False
 
-                elif 'delete' == line[0]:
-                    songName = line[1]
-                    s_id = int(line[2])
-                    ## Send delete song to the server
-                    
-                    # increment the seq_no
-                    client_counter++
-                    # get msg payload
-                    msg = client_delete(self.index, client_counter, songName)
-                    # send msg to server
-                    send(s_id, msg)
+                    elif 'delete' == line[0]:
+                        songName = line[1]
+                        s_id = int(line[2])
+                        ## Send delete song to the server
+                        
+                        # increment the seq_no
+                        client_counter++
+                        # get msg payload
+                        msg = client_delete(self.index, client_counter, songName)
+                        # send msg to server
+                        send(s_id, msg)
+                        global_flag = False
 
-                elif 'get' == line[0]:
-                    songName = line[1]
-                    s_id = int(line[2])
-                    ## Send get song to the server
-                    
-                    # get msg payload
-                    msg = client_read(self.index, client_counter, songName)
-                    # send msg to server
-                    send(s_id, msg)
-
-            else:
-                try:
-                    data = self.conn.recv(1024)
-                    self.buffer += data
-                except:
-                    self.valid = False
-                    self.conn.close()
-                    break
+                    elif 'get' == line[0]:
+                        songName = line[1]
+                        s_id = int(line[2])
+                        ## Send get song to the server
+                        
+                        # get msg payload
+                        msg = client_read(self.index, client_counter, songName)
+                        # send msg to server
+                        send(s_id, msg)
+                        global_flag = False
+                else:
+                    try:
+                        data = self.conn.recv(1024)
+                        self.buffer += data
+                    except:
+                        self.valid = False
+                        self.conn.close()
+                        break
 
     def send(self, s):
         self.conn.send(str(s) + '\n')
@@ -82,13 +87,13 @@ class MasterHandler(Thread):
             pass
 
 def send(pid, msg):
-    global mHandler, root_port21k
+    global mHandler, root_port20k
     if pid is -1:
         mHandler.send(msg)
         return
     try:
         sock = socket(AF_INET, SOCK_STREAM)
-        sock.connect((address, root_port21k + pid))
+        sock.connect((address, root_port20k + pid))
         sock.send(str(msg) + '\n')
         sock.close()
     except:
@@ -107,7 +112,38 @@ class ServerHandler(Thread):
         LOG.debug('%d: client.ServerHandler()' % self.index)
     def run():
         LOG.debug('%d: client.ServerHandler.run()' % self.index)
-        # TODO: do something
+        while self.valid:
+            if not global_flag:
+                if '\n' in self.buffer:
+                    (line, rest) = self.buffer.split('\n', 1)
+                    LOG.debug('%d: client got \'%s\'' % (self.index, line))
+                    self.buffer = rest
+                    #TODO
+                    line = ClientDeserialize(line)
+                    if line.url == 'ERR_DEP':
+                        if line.action_type in ['PUT', 'DELETE']:
+                            global_flag = True
+                        elif line.action_type == 'GET':
+                            # send msg to master
+                            send(-1, line.url)
+                            global_flag = True
+                    # operation successful
+                    else:
+                        if line.action_type in ['PUT', 'DELETE']:
+                            global_flag = True
+                        elif line.action_type == 'GET':
+                            # send msg to master
+                            send(-1, "getResp " + str(line.songName) + ":" + str(line.url))
+                            global_flag = True
+
+                else:
+                    try:
+                        data = self.conn.recv(1024)
+                        self.buffer += data
+                    except:
+                        self.valid = False
+                        self.conn.close()
+                        break
 
 def main():
     global address, mHandler, root_port21k
