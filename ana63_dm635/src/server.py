@@ -83,7 +83,7 @@ class ClientServerHandler(Thread):
                             else:
                                 self.vv[self.index] += 1
                             sendClient(line.client_id, server_client_response(line.action_type, line.song_name, line.url, self.vv))
-                            LOG.debug('%d: server.ClientServerHandler, log, vv = %s,%s' % (self.index, self.log, self.vv))
+                            LOG.debug('%d: server.ClientServerHandler, log_com, log, vv = %s,%s,%s' % (self.index, self.log_com, self.log, self.vv))
                         elif line.action_type == DELETE:
                             self.log_entry(DELETE, line.song_name)
                             if self.index not in self.vv:
@@ -121,7 +121,7 @@ class ClientServerHandler(Thread):
 
     # Not thread safe!
     def log_entry(self, op_type, op_value):
-        LOG.debug('   server.ClientServerHandler.log')
+        LOG.debug('   server.ClientServerHandler.log_entry(%s,%s)' % (op_type, op_value))
         if self.am_primary:
             log = self.log_com
         else:
