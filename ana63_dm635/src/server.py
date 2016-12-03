@@ -17,6 +17,7 @@ address = 'localhost'
 class ClientServerHandler(Thread):
     def __init__(self, index, address, connections, committed_log, tentative_log, am_primary):
         Thread.__init__(self)
+        LOG.debug('server.ClientHandler begin')
         self.am_primary = am_primary
         self.connections = connections
         self.index = index
@@ -37,6 +38,7 @@ class ClientServerHandler(Thread):
         LOG.debug('%d: server.ClientHandler.run()' % self.index)
         while True:
             conn, addr = self.sock.accept()
+            LOG.debug('%d: server.ClientHandler accept' % self.index)
             buff = ''
             valid = True
             while valid:
@@ -88,7 +90,6 @@ class ClientServerHandler(Thread):
                     try:
                         buff += conn.recv(1024)
                     except:
-                        LOG.debug('ClientServerHandler recv failed')
                         valid = False
                         conn.close()
                         break
@@ -117,11 +118,12 @@ class ClientServerHandler(Thread):
 
 # listens for messages from the master
 class MasterHandler(Thread):
-    def __init__(self, index, address, port, connections, log):
+    def __init__(self, index, address, port, connections, log_com, log):
         Thread.__init__(self)
         self.buffer = ''
         self.connections = connections
         self.index = index
+        self.log_com = log_com
         self.log = log
         self.sock = socket(AF_INET, SOCK_STREAM)
         self.sock.bind((address, port))
@@ -201,19 +203,20 @@ def version_vector(log):
 def main():
     global address
     connections = set()
-    commited_log = []
+    committed_log = []
     tentative_log = []
 
     index = int(sys.argv[1])
     port = int(sys.argv[2])
 
     # Process with id = 0 starts out as primary.
-    i_am_primary = (index == 0)
+    am_primary = (index == 0)
 
     LOG.basicConfig(filename='LOG/%d.log' % index, level=LOG.DEBUG)
     LOG.debug('%d: server.main()' % index)
 
-    cshandler = ClientServerHandler(index, address, connections, committed_log, tentative_log, i_am_primary)
+    cshandler = ClientServerHandler(index, address, connections, committed_log, tentative_log, am_primary)
+
     mhandler = MasterHandler(index, address, port, connections, committed_log, tentative_log)
     cshandler.start()
     mhandler.start()
