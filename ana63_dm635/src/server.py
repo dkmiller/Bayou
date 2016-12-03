@@ -211,7 +211,7 @@ def sendClient(c_id, message):
         sock.send(str(message) + '\n')
         sock.close()
     except Exception as msg:
-        LOG.debug('server send ERROR: ' + str(msg))
+        LOG.debug('   server.sendClient ERROR: ' + str(msg))
 
 # Send a message to a server.
 def sendServer(s_id, message):
@@ -222,7 +222,7 @@ def sendServer(s_id, message):
         sock.send(str(message) + '\n')
         sock.close()
     except Exception as msg:
-        LOG.debug('server send ERROR: ' + str(msg))
+        LOG.debug('   server.sendServer ERROR: ' + str(msg))
 
 
 # Returns the version vector corresponding to a log.
