@@ -24,6 +24,7 @@ class MasterHandler(Thread):
         LOG.debug('%d: client.MasterHandler()' % self.index)
 
     def run(self):
+        global global_flag
         while self.valid:
             if global_flag:
                 if '\n' in self.buffer:
@@ -106,6 +107,7 @@ class ServerHandler(Thread):
         LOG.debug('client.ServerHandler()')
 
     def run():
+        global global_flag
         LOG.debug('%d: client.ServerHandler.run()' % self.index)
         while True:
             conn, addr = self.sock.accept()
