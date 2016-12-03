@@ -142,15 +142,13 @@ class MasterHandler(Thread):
                 if 'createConn' == line[0]:
                     s_ids = map(int, line[1:])
                     self.connections |= set(s_ids)
-                    message = '%d:connect' % self.index
                     for s_id in s_ids:
-                        sendServer(s_id, message)
+                        sendServer(s_id, server_connect(self.index, self.index))
                 elif 'breakConn' == line[0]:
                     s_ids = map(int, line[1:])
                     self.connections -= set(s_ids)
-                    message = '%d:disconnect' % self.index
                     for s_id in s_ids:
-                        sendServer(s_id, message)
+                        sendServer(s_id, server_disconnect(self.index, self.index))
                 elif 'retire' == line[0]:
                     # TODO: retire.
                     pass
