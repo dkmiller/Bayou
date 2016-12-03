@@ -8,7 +8,7 @@ root_port21k = 21000
 root_port20k = 20000
 address = 'localhost'
 mHandler = None
-client_vv = [-1]*10
+client_vv = dict()
 global_flag = True
 
 class MasterHandler(Thread):
@@ -130,10 +130,11 @@ class ServerHandler(Thread):
                     # operation successful
                     else:
                         if line.action_type in ['PUT', 'DELETE']:
-                            client_vv
+                            client_vv = line.vv
                             global_flag = True
                         elif line.action_type == 'GET':
                             # send msg to master
+                            client_vv = line.vv
                             send(-1, "getResp " + str(line.songName) + ":" + str(line.url))
                             global_flag = True
 
