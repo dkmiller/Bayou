@@ -8,7 +8,7 @@ root_port21k = 21000
 root_port20k = 20000
 address = 'localhost'
 mHandler = None
-client_counter = 0
+client_vv = [-1]*10
 global_flag = True
 
 class MasterHandler(Thread):
@@ -40,7 +40,7 @@ class MasterHandler(Thread):
                         # increment the seq_no
                         client_counter++
                         # get msg payload
-                        msg = client_add(self.index, client_counter, songName, URL)
+                        msg = client_add(self.index, client_vv, songName, URL)
                         # send msg to server
                         send(s_id, msg)
                         global_flag = False
@@ -53,7 +53,7 @@ class MasterHandler(Thread):
                         # increment the seq_no
                         client_counter++
                         # get msg payload
-                        msg = client_delete(self.index, client_counter, songName)
+                        msg = client_delete(self.index, client_vv, songName)
                         # send msg to server
                         send(s_id, msg)
                         global_flag = False
@@ -64,7 +64,7 @@ class MasterHandler(Thread):
                         ## Send get song to the server
                         
                         # get msg payload
-                        msg = client_read(self.index, client_counter, songName)
+                        msg = client_read(self.index, client_vv, songName)
                         # send msg to server
                         send(s_id, msg)
                         global_flag = False
@@ -130,6 +130,7 @@ class ServerHandler(Thread):
                     # operation successful
                     else:
                         if line.action_type in ['PUT', 'DELETE']:
+                            client_vv
                             global_flag = True
                         elif line.action_type == 'GET':
                             # send msg to master
