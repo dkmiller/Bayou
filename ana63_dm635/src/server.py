@@ -13,38 +13,64 @@ from serialization import *
 
 address = 'localhost'
 
+class WorkerThread(Thread):
+    def __init__(self, address, index, port, connections, global_lock, committed_log, tentative_log, timer, vv, am_primary):
+        Thread.__init__(self)
+        LOG.debug('server.WorkerThread()')
+        self.address = address
+        self.index = index
+        self.port = port
+        self.connections = connections
+        self.global_lock = global_lock
+        self.committed_log = committed_log
+        self.tentative_log = tentative_log
+        self.timer = timer
+        self.vv = vv
+        self.am_primary = am_primary
+
+        self.sock = socket(AF_INET, SOCK_STREAM)
+        self.sock.bind((address, 20000+index))
+        self.sock.listen(1)
+        LOG.debug('server.WorkerThread() ends')
+    def run(self):
+        while True:
+            conn, addr = self.sock.accept()
+            LOG.debug('%d: server.WorkerThread starting ClientServerHandler' % self.index)
+            handler = ClientServerHandler(conn, self.index, self.connections, self.global_lock, self.committed_log, self.tentative_log, self.timer, self.vv, self.am_primary)
+            LOG.debug('%d: server.WorkerThread started ClientServerHandler' % self.index)
+            handler.start()
+
+
 # Listens for messages from clients and servers.
 class ClientServerHandler(Thread):
-    def __init__(self, index, address, connections, committed_log, tentative_log, am_primary):
+    def __init__(self, conn, index, connections, global_lock, committed_log, tentative_log, timer, vv, am_primary):
         Thread.__init__(self)
         self.am_primary = am_primary
+        self.buffer = ''
+        self.conn = conn
         self.connections = connections
         self.index = index
+        self.global_lock = global_lock
         self.log = tentative_log
         self.log_com = committed_log
-        self.sock = socket(AF_INET, SOCK_STREAM)
-        self.sock.bind((address, 20000+self.index))
-        self.sock.listen(1)
-        self.timer = -1
-        self.vv = {}
+        self.timer = timer
+        self.valid = True
+        self.vv = vv
         LOG.debug('%d: server.ClientHandler(am_primary=%s)' % (self.index, self.am_primary))
 
+    # Not thread-safe!
     def accept_stamp(self):
         self.timer += 1
         return (self.index, self.timer)
 
     def run(self):
         LOG.debug('%d: server.ClientHandler.run()' % self.index)
-        while True:
-            conn, addr = self.sock.accept()
-            buff = ''
-            valid = True
-            while valid:
-                if '\n' in buff:
-                    (line, rest) = buff.split('\n', 1)
-                    LOG.debug('%d: server.ClientServerHandler received \'%s\'' % (self.index, line))
-                    buff = rest
-                    line = ServerDeserialize(line)
+        while self.valid:
+            if '\n' in self.buffer:
+                (line, rest) = self.buffer.split('\n', 1)
+                self.buffer = rest
+                line = ServerDeserialize(line)
+                with self.global_lock:
                     LOG.debug('%d: server.ClientServerHandler received %s' % (self.index, line.__dict__))
                     if line.sender_type == CLIENT:
                         client_knows_too_much = False
@@ -89,13 +115,17 @@ class ClientServerHandler(Thread):
                             self.connections.discard(line.sender_index)
                         elif line.action_type == UR_ELECTED:
                             self.am_primary = True
-                else:
-                    try:
-                        buff += conn.recv(1024)
-                    except:
-                        valid = False
-                        conn.close()
-                        break
+            else:
+                try:
+                    data = self.conn.recv(1024)
+                    self.buffer += data
+                except:
+                    self.valid = False
+                    self.conn.close()
+                    LOG.debug('%d: server.ClientServerHandler closed connection' % self.index)
+                    break
+
+    # Not thread safe!
     def log_entry(self, op_type, op_value):
         if self.am_primary:
             log = self.log_com
@@ -106,6 +136,8 @@ class ClientServerHandler(Thread):
             'OP_VALUE': op_value,
             'ACCT_STAMP': self.accept_stamp()
         })
+
+    # Not thread safe!
     def state(self):
         result = {}
         def update(st, log):
@@ -161,7 +193,8 @@ class MasterHandler(Thread):
                     pass
             else:
                 try:
-                    self.buffer += self.conn.recv(1024)
+                    data = self.conn.recv(1024)
+                    self.buffer += data
                 except:
                     self.valid = False
                     self.conn.close()
@@ -185,6 +218,7 @@ def sendClient(c_id, message):
 # Send a message to a server.
 def sendServer(s_id, message):
     global address
+    LOG.debug('%d: server.send(%d, \'%s\')' % (s_id, message))
     try:
         sock = socket(AF_INET, SOCK_STREAM)
         sock.connect((address, 20000 + s_id))
@@ -205,8 +239,11 @@ def version_vector(log):
 def main():
     global address
     connections = set()
+    global_lock = Lock()
     committed_log = []
     tentative_log = []
+    timer = -1
+    vv = {}
 
     index = int(sys.argv[1])
     port = int(sys.argv[2])
@@ -217,10 +254,9 @@ def main():
     LOG.basicConfig(filename='LOG/%d.log' % index, level=LOG.DEBUG)
     LOG.debug('%d: server.main()' % index)
 
-    cshandler = ClientServerHandler(index, address, connections, committed_log, tentative_log, am_primary)
-
+    wthread = WorkerThread(address, index, port, connections, global_lock, committed_log, tentative_log, timer, vv, am_primary)
     mhandler = MasterHandler(index, address, port, connections, committed_log, tentative_log)
-    cshandler.start()
+    wthread.start()
     mhandler.start()
     LOG.debug('%d: server.main: beginning while loop' % index)
 
