@@ -12,6 +12,7 @@ from time import sleep
 from serialization import *
 
 address = 'localhost'
+first_time = True
 
 class WorkerThread(Thread):
     def __init__(self, address, index, port, connections, global_lock, committed_log, tentative_log, timer, vv, am_primary):
@@ -60,6 +61,7 @@ class ClientServerHandler(Thread):
         return (self.index, self.timer)
 
     def run(self):
+        global first_time
         while self.valid:
             if '\n' in self.buffer:
                 (line, rest) = self.buffer.split('\n', 1)
@@ -107,6 +109,13 @@ class ClientServerHandler(Thread):
                                 anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.logs['vv'], self.vv)
                         elif line.action_type == CONNECT:
                             self.connections.add(line.sender_index)
+                            LOG.debug('%d: server.ClientServerHandler first_time? line.logs = %s' % (self.index, line.logs))
+                            if line.logs['first_time']:
+                                # TODO: use recursive names if possible.
+                                self.log_entry('CREATE', line.sender_index)
+                            if first_time:
+                                sendServer(line.sender_index, server_connect(self.index, self.index, first_time))
+                                first_time = False
                         elif line.action_type == DISCONNECT:
                             self.connections.discard(line.sender_index)
                         elif line.action_type == UR_ELECTED:
@@ -140,6 +149,18 @@ class ClientServerHandler(Thread):
         update(result, self.log)
         return result
 
+def print_logs(committed_log, tentative_log):
+    result = 'log '
+    for entry in committed_log:
+        result += '%s:(%s):%s' % (entry['OP_TYPE'], entry['OP_VALUE'], 'TRUE')
+        result += ','
+    for entry in tentative_log:
+        result += '%s:(%s):%s' % (entry['OP_TYPE'], entry['OP_VALUE'], 'FALSE')
+        result += ','
+    if result != 'log ':
+        result = result[:-1]
+    return result
+
 def update(st, log):
     for log_entry in log:
         if log_entry['OP_TYPE'] == 'PUT':
@@ -151,11 +172,12 @@ def update(st, log):
 
 # listens for messages from the master
 class MasterHandler(Thread):
-    def __init__(self, index, address, port, connections, log_com, log):
+    def __init__(self, index, address, port, connections, global_lock, log_com, log):
         Thread.__init__(self)
         self.buffer = ''
         self.connections = connections
         self.index = index
+        self.global_lock = global_lock
         self.log_com = log_com
         self.log = log
         self.sock = socket(AF_INET, SOCK_STREAM)
@@ -163,9 +185,11 @@ class MasterHandler(Thread):
         self.sock.listen(1)
         self.conn, self.addr = self.sock.accept()
         self.valid = True
+
         LOG.debug('%d: server.MasterHandler()' % self.index)
 
     def run(self):
+        global first_time
         while self.valid:
             if '\n' in self.buffer:
                 (line, rest) = self.buffer.split('\n', 1)
@@ -174,13 +198,16 @@ class MasterHandler(Thread):
                 line = line.split()
                 if 'createConn' == line[0]:
                     s_ids = map(int, line[1:])
-                    self.connections |= set(s_ids)
-                    LOG.debug('%d: server.MasterHandler: connections = %s' % (self.index, self.connections))
-                    for s_id in s_ids:
-                        sendServer(s_id, server_connect(self.index, self.index))
+                    with self.global_lock:
+                        self.connections |= set(s_ids)
+                        LOG.debug('%d: server.MasterHandler: connections = %s' % (self.index, self.connections))
+                        for s_id in s_ids:
+                            sendServer(s_id, server_connect(self.index, self.index, first_time))
+                            first_time = False
                 elif 'breakConn' == line[0]:
                     s_ids = map(int, line[1:])
-                    self.connections -= set(s_ids)
+                    with self.global_lock:
+                        self.connections -= set(s_ids)
                     for s_id in s_ids:
                         sendServer(s_id, server_disconnect(self.index, self.index))
                 elif 'retire' == line[0]:
@@ -188,7 +215,9 @@ class MasterHandler(Thread):
                     pass
                 elif 'printLog' == line[0]:
                     # TODO: print log.
-                    pass
+                    with self.global_lock:
+                        msg = print_logs(self.log_com, self.log)
+                    self.send(msg)
             else:
                 try:
                     data = self.conn.recv(1024)
@@ -234,7 +263,7 @@ def version_vector(log):
     return result
 
 def main():
-    global address
+    global address, first_time
     connections = set()
     global_lock = Lock()
     committed_log = []
@@ -247,12 +276,14 @@ def main():
 
     # Process with id = 0 starts out as primary.
     am_primary = (index == 0)
+    if am_primary:
+        first_time = False
 
     LOG.basicConfig(filename='LOG/%d.log' % index, level=LOG.DEBUG)
     LOG.debug('%d: server.main()' % index)
 
     wthread = WorkerThread(address, index, port, connections, global_lock, committed_log, tentative_log, timer, vv, am_primary)
-    mhandler = MasterHandler(index, address, port, connections, committed_log, tentative_log)
+    mhandler = MasterHandler(index, address, port, connections, global_lock, committed_log, tentative_log)
     wthread.start()
     mhandler.start()
     LOG.debug('%d: server.main: beginning while loop' % index)

@@ -42,8 +42,8 @@ def client_message(c_id, seq_no, write_type, song_name, url):
 ## SERVER CODE.
 
 # Server should call this to serialize a 'connect to me' message.
-def server_connect(s_index, s_id):
-    return server_message(s_index, s_id, CONNECT, None)
+def server_connect(s_index, s_id, first_time):
+    return server_message(s_index, s_id, CONNECT, {'first_time': first_time})
 
 # Server should call this to serialize a 'disconnect with me' message.
 def server_disconnect(s_index, s_id):
@@ -81,8 +81,8 @@ class ServerDeserialize:
         elif self.sender_type == 'server':
             self.sender_index, self.sender_id, self.action_type = rest.split('!',2)
             self.sender_index = int(self.sender_index)
-            if self.action_type not in [CONNECT, DISCONNECT, UR_ELECTED]:
+            if self.action_type not in [DISCONNECT, UR_ELECTED]:
                 self.action_type, rest = rest.split('!',3)[2:]
-                if self.action_type == ANTI_ENTROPY:
+                if self.action_type in [ANTI_ENTROPY, CONNECT]:
                     self.logs = literal_eval(rest)
 
