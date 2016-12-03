@@ -1,7 +1,7 @@
 import logging as LOG
 from socket import AF_INET, socket, SOCK_STREAM
 import sys
-import serialization
+from serialization import client_add, client_delete, client_get, ClientDeserialize
 from threading import Thread, Lock
 
 root_port21k = 21000
