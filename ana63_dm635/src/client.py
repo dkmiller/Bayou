@@ -2,7 +2,7 @@ import logging as LOG
 from Queue import Queue
 from socket import AF_INET, socket, SOCK_STREAM
 import sys
-from serialization import client_add, client_delete, client_get, ClientDeserialize
+from serialization import *
 from threading import Thread, Lock
 
 root_port21k = 21000
@@ -35,10 +35,7 @@ def master_logic(line, client_vv, index):
         songName = line[1]
         s_id = int(line[2])
         ## Send get song to the server
-        
-        # get msg payload
-        msg = client_read(index, client_vv, songName)
-        # send msg to server
+        msg = client_get(index, client_vv, songName)
         send(s_id, msg)
     LOG.debug('%d: client.master_logic ends' % index)
 
@@ -82,7 +79,7 @@ class MasterHandler(Thread):
 
 def send(pid, msg):
     global mHandler, root_port20k
-    LOG.debug('client.send(%d,\'%s\')' % (pid, msg))
+    LOG.debug('   client.send()')
     if pid is -1:
         mHandler.send(msg)
         return
@@ -111,20 +108,23 @@ class WorkerHandler(Thread):
             handler.start()
 
 def server_logic(line, client_vv, index):
-    LOG.debug('   client.server_logic begins')
+    LOG.debug('   client.server_logic(%s)' % line)
     line = ClientDeserialize(line)
-    if line.url == 'ERR_DEP':
-        if line.action_type == 'GET':
+    LOG.debug('   client.server_logic(%s)' % line.__dict__)
+    if line.url == ERR_DEP:
+        if line.action_type == GET:
             # send msg to master
             send(-1, line.url)
     # operation successful
     else:
-        if line.action_type in ['PUT', 'DELETE']:
+        if line.action_type in [ADD, DELETE]:
             client_vv = line.vv
-        elif line.action_type == 'GET':
+        elif line.action_type == GET:
             # send msg to master
             client_vv = line.vv
-            send(-1, "getResp " + str(line.song_name) + ":" + str(line.url))
+            msg = 'getResp %s:%s' % (line.song_name, line.url)
+            LOG.debug('   client.server_logic about to send \'%s\'' % msg)
+            send(-1,msg)
     LOG.debug('   client.server_logic ends')
 
 

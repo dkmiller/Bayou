@@ -77,14 +77,14 @@ class ClientServerHandler(Thread):
                         # Client doesn't know too much, so we can perform the requested action.
                         elif line.action_type == ADD:
                             op_value = '%s,%s' % (line.song_name, line.url)
-                            self.log_entry(ADD, op_value)
+                            self.log_entry('PUT', op_value)
                             if self.index not in self.vv:
                                 self.vv[self.index] = 0
                             else:
                                 self.vv[self.index] += 1
                             sendClient(line.client_id, server_client_response(line.action_type, line.song_name, line.url, self.vv))
                         elif line.action_type == DELETE:
-                            self.log_entry(DELETE, line.song_name)
+                            self.log_entry('DELETE', line.song_name)
                             if self.index not in self.vv:
                                 self.vv[self.index] = 0
                             else:
@@ -94,9 +94,11 @@ class ClientServerHandler(Thread):
                             # TODO: write self.state()
                             url = 'ERR_KEY'
                             state = self.state()
+                            LOG.debug('%d: server.ClientServerHandler got GET state= %s' % (self.index, state))
                             if line.song_name in state:
                                 url = state[line.song_name]
                             sendClient(line.client_id, server_client_response(line.action_type, line.song_name, url, self.vv))
+                            LOG.debug('%d: server.ClientServerHandler got GET after send' % self.index)
                     elif line.sender_type == SERVER:
                         if line.action_type == ANTI_ENTROPY:
                             if self.am_primary:
@@ -134,16 +136,18 @@ class ClientServerHandler(Thread):
     # Not thread safe!
     def state(self):
         result = {}
-        def update(st, log):
-            for log_entry in log:
-                if log_entry['OP_TYPE'] == 'PUT':
-                    song_name, url = log_entry['OP_VALUE'].split(',',1)
-                    st[song_name] = url
-                elif log_entry['OP_TYPE'] == 'DELETE':
-                    if log_entry['OP_VALUE'] in st:
-                        del st[log_entry['OP_VALUE']]
         update(result, self.log_com)
         update(result, self.log)
+        return result
+
+def update(st, log):
+    for log_entry in log:
+        if log_entry['OP_TYPE'] == 'PUT':
+            song_name, url = log_entry['OP_VALUE'].split(',',1)
+            st[song_name] = url
+        elif log_entry['OP_TYPE'] == 'DELETE':
+            if log_entry['OP_VALUE'] in st:
+                del st[log_entry['OP_VALUE']]
 
 # listens for messages from the master
 class MasterHandler(Thread):
