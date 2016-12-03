@@ -37,8 +37,6 @@ class MasterHandler(Thread):
                         s_id = int(line[3])
                         ## Send add song to the server
                         
-                        # increment the seq_no
-                        client_counter++
                         # get msg payload
                         msg = client_add(self.index, client_vv, songName, URL)
                         # send msg to server
@@ -50,8 +48,6 @@ class MasterHandler(Thread):
                         s_id = int(line[2])
                         ## Send delete song to the server
                         
-                        # increment the seq_no
-                        client_counter++
                         # get msg payload
                         msg = client_delete(self.index, client_vv, songName)
                         # send msg to server
