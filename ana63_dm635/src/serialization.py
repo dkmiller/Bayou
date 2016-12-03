@@ -1,9 +1,12 @@
 from ast import literal_eval
 
+CLIENT = 'client'
 ADD = 'add'
 DELETE = 'delete'
+ERR_DEP = 'ERR_DEP'
 GET = 'get'
 
+SERVER = 'server'
 ANTI_ENTROPY = 'anti-entropy'
 CONNECT = 'connect'
 DISCONNECT = 'disconnect'
@@ -60,7 +63,7 @@ def server_logs(s_index, s_id, log_com, log_ten):
 def server_message(s_index, s_id, m_type, stuff):
     message = '%s!%d!%s!%s' % ('server', s_index, s_id, m_type)
     if stuff is not None:
-        message += ':%s' % stuff
+        message += '!%s' % stuff
     return message
 
 # Call this to get an object representing the deserialized state of a message. 

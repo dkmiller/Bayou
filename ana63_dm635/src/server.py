@@ -1,4 +1,6 @@
 from ast import literal_eval
+from collections import defaultdict
+from entropy import *
 import logging as LOG
 import os
 from random import uniform
@@ -7,6 +9,7 @@ from socket import AF_INET, socket, SOCK_STREAM
 import sys
 from threading import Thread, Lock
 from time import sleep
+from serialization import *
 
 address = 'localhost'
 
@@ -21,6 +24,7 @@ class ClientServerHandler(Thread):
         self.sock.bind((address, 20000+self.index))
         self.sock.listen(1)
         self.timer = -1
+        self.vv = {}
         LOG.debug('%d: server.ClientHandler()' % self.index)
 
     def accept_stamp(self):
@@ -36,56 +40,50 @@ class ClientServerHandler(Thread):
             while valid:
                 if '\n' in buff:
                     (line, rest) = buff.split('\n', 1)
-                    LOG.debug('ClientServerHandler: received \'%s\'' % line)
-                    # Received anti-entropy request from another server.
-                    if match('^\d+:anti-entropy:', line):
-                        line = line.split(':', 2)
-                        sender_id = int(line[0])
-                        vv = literal_eval(line[2])
-                        anti_entropy(self.connections, self.log, self.index, sender_id, vv)
-                    elif match('^d+:anti-response:', line):
-                        line = line.split(':',2)
-                        s_id = int(line[0])
-                        s_log = literal_eval(line[2]))
-                        # Update log.
-                        for log_entry in s_log:
-                            if log_entry not in self.log:
-                                self.log.append(log_entry)
-                        # TODO: handle retirement.
-                    elif match('^d+:connect', line):
-                        s_id = int(line.split(':')[0])
-                        self.connections.add(s_id)
-                    elif match('^d:create', line):
-                        s_id = int(line.split(':')[0])
-                        self.connections.add(s_id)
-                        self.log_entry('CREATE', s_id)
-                    elif match('^\d+:disconnect', line):
-                        s_id = int(line.split(':')[0])
-                        self.connections.discard(s_id)
-                    elif match('^\d+:retire', line):
-                        s_id = int(line.split(':')[0])
-                        self.connections.discard(s_id)
-                        self.log_entry('RETIRE', s_id)
-                    elif match('^d:add:', line):
-                        line = line.split(':')
-                        song_name = line[2]
-                        URL = line[3]
-                        self.log_entry('PUT', song_name + ',' + URL)
-                    elif match('^d:delete', line):
-                        line = line.split(':')
-                        song_name = line[2]
-                        self.log_entry('DELETE', song_name)
-                    elif match('^d:get:', line):
-                        line = line.split(':')
-                        c_id = int(line[0])
-                        song_name = line[2]
-                        state = current_state(self.log)
-                        if song_name in state:
-                            URL = state[song_name]
-                            message = '%d:%s:%s' % (self.index, song_name, URL)
-                        else:
-                            message = '%d:%s:ERR_DEP' % (self.index, song_name)
-                        sendClient(c_id, message)
+                    line = ServerDeserialize(line)
+                    if line.sender_type == CLIENT:
+                        client_knows_too_much = False
+                        for server in line.vv:
+                            if server not in self.vv or self.vv[server] < line.vv[server]:
+                                client_knows_too_much = True
+                        if client_knows_too_much:
+                            sendClient(line.client_id, server_client_response(line.action_type, line.song_name, ERR_DEP, line.vv))
+                        # Client doesn't know too much, so we can perform the requested action.
+                        elif line.action_type == ADD:
+                            self.log_entry(ADD, '%s,%s' % (line.song_name, line.url))
+                            if self.index not in self.vv:
+                                self.vv[self.index] = 0
+                            else:
+                                self.vv[self.index] += 1
+                            sendClient(line.client_id, server_client_response(line.action_type, line.song_name, line.url, self.vv))
+                        elif line.action_type == DELETE:
+                            self.log_entry(DELETE, line.song_name)
+                            if self.index not in self.vv:
+                                self.vv[self.index] = 0
+                            else:
+                                self.vv[self.index] += 1
+                            sendClient(line.client_id, server_client_response(line.action_type, line.song_name, '', self.vv))
+                        elif line.action_type == GET:
+                            # TODO: write self.state()
+                            url = ''
+                            state = self.state()
+                            if line.song_name in state:
+                                url = state[line.song_name]
+                            sendClient(line.client_id, server_client_response(line.action_type, line.song_name, url, self.vv))
+                    elif line.sender_type == SERVER:
+                        if line.action_type == ANTI_ENTROPY:
+                            # TODO: make this correct!
+                            if 'I am primary':
+                                primary_anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'])
+                            else:
+                                anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'])
+                        elif line.action_type == CONNECT:
+                            self.connections.add(line.server_index)
+                        elif line.action_type == DISCONNECT:
+                            self.connections.discard(line.server_index)
+                        elif line.action_type == UR_ELECTED:
+                            # TODO: do something!
+                            pass
                 else:
                     try:
                         buff += conn.recv(1024)
