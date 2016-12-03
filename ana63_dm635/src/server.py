@@ -166,26 +166,6 @@ class MasterHandler(Thread):
     def send(self, message):
         self.conn.send(str(message) + '\n')
 
-# Conducts anti-entropy with process pid.
-def anti_entropy(connections, log, pid, s_id, vv):
-    LOG.debug('%d:server.anti_entropy(%d, %s)' % (pid, s_id, vv))
-    send_log = []
-    for log_entry in log:
-        index, timer = log_entry['ACCT_STAMP']
-        if vv[index] < timer:
-            send_log.append(log_entry)
-    message = '%d:anti-response:%s' % send_log
-    sendServer(s_id, message)
-
-# Returns a song-name: URL dictionary determined by the log.
-def current_state(log):
-    result = {}
-    for log_entry in log:
-        if log_entry['OP_TYPE'] == 'PUT':
-            song_name, URL = log_entry['OP_VALUE'].split(',')
-            result[song_name] = URL
-        elif log_entry['OP_TYPE'] == 'DELETE':
-            song_name = log_entry['OP_VALUE']
 
 # Send a message to a client.
 def sendClient(c_id, message):
