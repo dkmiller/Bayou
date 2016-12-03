@@ -77,16 +77,13 @@ class ClientServerHandler(Thread):
                         # Client doesn't know too much, so we can perform the requested action.
                         elif line.action_type == ADD:
                             op_value = '%s,%s' % (line.song_name, line.url)
-                            LOG.debug('%d: server.ClientServerHandler ADD(%s)' % (self.index, op_value))
                             self.log_entry(ADD, op_value)
-                            LOG.debug('%d: server.ClientServerHandler ADD after log_entry' % self.index)
                             if self.index not in self.vv:
                                 self.vv[self.index] = 0
                             else:
                                 self.vv[self.index] += 1
-                            LOG.debug('%d: server.ClientServerHandler ADD before send' % self.index)
                             sendClient(line.client_id, server_client_response(line.action_type, line.song_name, line.url, self.vv))
-                            LOG.debug('%d: server.ClientServerHandler ADD end of if' % self.index)
+                            LOG.debug('%d: server.ClientServerHandler, log, vv = %s,%s' % (self.index, self.log, self.vv))
                         elif line.action_type == DELETE:
                             self.log_entry(DELETE, line.song_name)
                             if self.index not in self.vv:
