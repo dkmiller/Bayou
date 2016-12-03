@@ -16,7 +16,6 @@ address = 'localhost'
 class WorkerThread(Thread):
     def __init__(self, address, index, port, connections, global_lock, committed_log, tentative_log, timer, vv, am_primary):
         Thread.__init__(self)
-        LOG.debug('server.WorkerThread()')
         self.address = address
         self.index = index
         self.port = port
@@ -31,13 +30,11 @@ class WorkerThread(Thread):
         self.sock = socket(AF_INET, SOCK_STREAM)
         self.sock.bind((address, 20000+index))
         self.sock.listen(1)
-        LOG.debug('server.WorkerThread() ends')
+        LOG.debug('server.WorkerThread()')
     def run(self):
         while True:
             conn, addr = self.sock.accept()
-            LOG.debug('%d: server.WorkerThread starting ClientServerHandler' % self.index)
             handler = ClientServerHandler(conn, self.index, self.connections, self.global_lock, self.committed_log, self.tentative_log, self.timer, self.vv, self.am_primary)
-            LOG.debug('%d: server.WorkerThread started ClientServerHandler' % self.index)
             handler.start()
 
 
@@ -81,6 +78,7 @@ class ClientServerHandler(Thread):
                             sendClient(line.client_id, server_client_response(line.action_type, line.song_name, ERR_DEP, line.vv))
                         # Client doesn't know too much, so we can perform the requested action.
                         elif line.action_type == ADD:
+                            LOG.debug('%d: server.ClientServerHandler ADD' % self.index)
                             self.log_entry(ADD, '%s,%s' % (line.song_name, line.url))
                             if self.index not in self.vv:
                                 self.vv[self.index] = 0
@@ -218,7 +216,7 @@ def sendClient(c_id, message):
 # Send a message to a server.
 def sendServer(s_id, message):
     global address
-    LOG.debug('%d: server.send(%d, \'%s\')' % (s_id, message))
+    LOG.debug('   server.send(%d, \'%s\')' % (s_id, message))
     try:
         sock = socket(AF_INET, SOCK_STREAM)
         sock.connect((address, 20000 + s_id))
@@ -262,8 +260,9 @@ def main():
 
     while True:
         # Initiate anti-entropy with all connections
+        LOG.debug('%d: server.main: connections = %s' % (index, connections))
         for pid in connections:
-            sendServer(pid, server_logs(index, index, committed_log, tentative_log, cshandler.vv))
+            sendServer(pid, server_logs(index, index, committed_log, tentative_log, vv))
         # Wait before conducting anti-entropy again.
         sleep(uniform(.1,.3))
 
