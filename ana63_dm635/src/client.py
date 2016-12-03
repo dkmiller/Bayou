@@ -125,7 +125,7 @@ def server_logic(line, client_vv, index):
             # send msg to master
             client_vv = line.vv
             send(-1, "getResp " + str(line.song_name) + ":" + str(line.url))
-    LOG.debug('   client.server_logic begins')
+    LOG.debug('   client.server_logic ends')
 
 
 
@@ -137,14 +137,15 @@ class ServerHandler(Thread):
         self.valid = True
         self.buffer = ''
         self.queue = queue
+        LOG.debug('%d: client.ServerHandler()' % self.index)
 
-    def run():
+    def run(self):
         while self.valid:
             if '\n' in self.buffer:
                 (line, rest) = self.buffer.split('\n', 1)
+                LOG.debug('%d: client.ServerHandler got \'%s\'' % (self.index, line))
                 self.buffer = rest
                 self.queue.put(line)
-                LOG.debug('%d: client.ServerHandler got \'%s\'' % (self.index, line))
             else:
                 try:
                     data = self.conn.recv(1024)

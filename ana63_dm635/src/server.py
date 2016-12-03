@@ -83,7 +83,6 @@ class ClientServerHandler(Thread):
                             else:
                                 self.vv[self.index] += 1
                             sendClient(line.client_id, server_client_response(line.action_type, line.song_name, line.url, self.vv))
-                            LOG.debug('%d: server.ClientServerHandler, log_com, log, vv = %s,%s,%s' % (self.index, self.log_com, self.log, self.vv))
                         elif line.action_type == DELETE:
                             self.log_entry(DELETE, line.song_name)
                             if self.index not in self.vv:
@@ -259,6 +258,7 @@ def main():
         for pid in connections:
             sendServer(pid, server_logs(index, index, committed_log, tentative_log, vv))
         # Wait before conducting anti-entropy again.
+        #LOG.debug('%d: server.main: log_com, log = %s, %s' % (index, committed_log, tentative_log))
         sleep(uniform(.1,.3))
 
 if __name__ == '__main__':
