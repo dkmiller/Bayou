@@ -24,7 +24,7 @@ class MasterHandler(Thread):
         LOG.debug('%d: client.MasterHandler()' % self.index)
 
     def run(self):
-        global global_flag
+        global client_vv, global_flag
         while self.valid:
             if global_flag:
                 if '\n' in self.buffer:
@@ -85,6 +85,7 @@ class MasterHandler(Thread):
 
 def send(pid, msg):
     global mHandler, root_port20k
+    LOG.debug('client.send(%d,\'%s\')' % (pid, msg))
     if pid is -1:
         mHandler.send(msg)
         return
@@ -107,7 +108,7 @@ class ServerHandler(Thread):
         LOG.debug('client.ServerHandler()')
 
     def run():
-        global global_flag
+        global client_vv, global_flag
         LOG.debug('%d: client.ServerHandler.run()' % self.index)
         while True:
             conn, addr = self.sock.accept()

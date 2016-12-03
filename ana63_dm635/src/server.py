@@ -17,7 +17,6 @@ address = 'localhost'
 class ClientServerHandler(Thread):
     def __init__(self, index, address, connections, committed_log, tentative_log, am_primary):
         Thread.__init__(self)
-        LOG.debug('server.ClientHandler begin')
         self.am_primary = am_primary
         self.connections = connections
         self.index = index
@@ -28,7 +27,7 @@ class ClientServerHandler(Thread):
         self.sock.listen(1)
         self.timer = -1
         self.vv = {}
-        LOG.debug('%d: server.ClientHandler()' % self.index)
+        LOG.debug('%d: server.ClientHandler(am_primary=%s)' % (self.index, self.am_primary))
 
     def accept_stamp(self):
         self.timer += 1
@@ -38,14 +37,17 @@ class ClientServerHandler(Thread):
         LOG.debug('%d: server.ClientHandler.run()' % self.index)
         while True:
             conn, addr = self.sock.accept()
-            LOG.debug('%d: server.ClientHandler accept' % self.index)
+            #LOG.debug('%d: server.ClientHandler accept' % self.index)
             buff = ''
             valid = True
             while valid:
                 if '\n' in buff:
                     (line, rest) = buff.split('\n', 1)
+                    #LOG.debug('%d: server.ClientServerHandler receive line \'%s\'' % (self.index, line))
                     line = ServerDeserialize(line)
+                    #LOG.debug('%d: server.ClientServerHandler receive line \'%s\'' % (self.index, line.__dict__))
                     if line.sender_type == CLIENT:
+                        LOG.debug('%d: server.ClientServerHandler: got \'%s\' from client' % (self.index, line.__dict__))
                         client_knows_too_much = False
                         for server in line.vv:
                             if server not in self.vv or self.vv[server] < line.vv[server]:
@@ -81,6 +83,7 @@ class ClientServerHandler(Thread):
                             else:
                                 anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.logs['vv'], self.vv)
                         elif line.action_type == CONNECT:
+                            LOG.debug('%d: server.ClientServerHandler: connect with %d' % (self.index, line.sender_index))
                             self.connections.add(line.server_index)
                         elif line.action_type == DISCONNECT:
                             self.connections.discard(line.server_index)
@@ -137,12 +140,13 @@ class MasterHandler(Thread):
             if '\n' in self.buffer:
                 (line, rest) = self.buffer.split('\n', 1)
                 self.buffer = rest
-                LOG.debug('%d: server received \'%s\'' % (self.index, line))
+                LOG.debug('%d: server.MasterHandler received \'%s\'' % (self.index, line))
                 line = line.split()
                 if 'createConn' == line[0]:
                     s_ids = map(int, line[1:])
                     self.connections |= set(s_ids)
                     for s_id in s_ids:
+                        LOG.debug('%d: server.MasterHandler: connecting to %d' % (self.index, s_id))
                         sendServer(s_id, server_connect(self.index, self.index))
                 elif 'breakConn' == line[0]:
                     s_ids = map(int, line[1:])

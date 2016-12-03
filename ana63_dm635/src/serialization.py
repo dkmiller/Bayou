@@ -79,10 +79,10 @@ class ServerDeserialize:
             elif self.action_type in [ADD]:
                 self.song_name, self.URL = rest.split('!',1)
         elif self.sender_type == 'server':
-            self.sender_index, self.sender_id, self.message_type = rest.split('!',2)
+            self.sender_index, self.sender_id, self.action_type = rest.split('!',2)
             self.sender_index = int(self.sender_index)
-            if self.message_type not in [CONNECT, DISCONNECT, UR_ELECTED]:
-                self.message_type, rest = rest.split('!',3)[2:]
-                if self.message_type == ANTI_ENTROPY:
+            if self.action_type not in [CONNECT, DISCONNECT, UR_ELECTED]:
+                self.action_type, rest = rest.split('!',3)[2:]
+                if self.action_type == ANTI_ENTROPY:
                     self.logs = literal_eval(rest)
 
