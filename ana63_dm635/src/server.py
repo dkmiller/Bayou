@@ -37,17 +37,16 @@ class ClientServerHandler(Thread):
         LOG.debug('%d: server.ClientHandler.run()' % self.index)
         while True:
             conn, addr = self.sock.accept()
-            #LOG.debug('%d: server.ClientHandler accept' % self.index)
             buff = ''
             valid = True
             while valid:
                 if '\n' in buff:
                     (line, rest) = buff.split('\n', 1)
-                    #LOG.debug('%d: server.ClientServerHandler receive line \'%s\'' % (self.index, line))
+                    LOG.debug('%d: server.ClientServerHandler received \'%s\'' % (self.index, line))
+                    buff = rest
                     line = ServerDeserialize(line)
-                    #LOG.debug('%d: server.ClientServerHandler receive line \'%s\'' % (self.index, line.__dict__))
+                    LOG.debug('%d: server.ClientServerHandler received %s' % (self.index, line.__dict__))
                     if line.sender_type == CLIENT:
-                        LOG.debug('%d: server.ClientServerHandler: got \'%s\' from client' % (self.index, line.__dict__))
                         client_knows_too_much = False
                         for server in line.vv:
                             if server not in self.vv or self.vv[server] < line.vv[server]:
@@ -78,15 +77,16 @@ class ClientServerHandler(Thread):
                             sendClient(line.client_id, server_client_response(line.action_type, line.song_name, url, self.vv))
                     elif line.sender_type == SERVER:
                         if line.action_type == ANTI_ENTROPY:
+                            LOG.debug('%d: server.ClientServerHandler before anti-entropy' % self.index)
                             if self.am_primary:
                                 primary_anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.logs['vv'], self.vv)
                             else:
                                 anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.logs['vv'], self.vv)
+                            LOG.debug('%d: server.ClientServerHandler after anti-entropy' % self.index)
                         elif line.action_type == CONNECT:
-                            LOG.debug('%d: server.ClientServerHandler: connect with %d' % (self.index, line.sender_index))
-                            self.connections.add(line.server_index)
+                            self.connections.add(line.sender_index)
                         elif line.action_type == DISCONNECT:
-                            self.connections.discard(line.server_index)
+                            self.connections.discard(line.sender_index)
                         elif line.action_type == UR_ELECTED:
                             self.am_primary = True
                 else:
@@ -145,8 +145,8 @@ class MasterHandler(Thread):
                 if 'createConn' == line[0]:
                     s_ids = map(int, line[1:])
                     self.connections |= set(s_ids)
+                    LOG.debug('%d: server.MasterHandler: connections = %s' % (self.index, self.connections))
                     for s_id in s_ids:
-                        LOG.debug('%d: server.MasterHandler: connecting to %d' % (self.index, s_id))
                         sendServer(s_id, server_connect(self.index, self.index))
                 elif 'breakConn' == line[0]:
                     s_ids = map(int, line[1:])
