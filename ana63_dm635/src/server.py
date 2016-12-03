@@ -73,10 +73,10 @@ class ClientServerHandler(Thread):
                     elif line.sender_type == SERVER:
                         if line.action_type == ANTI_ENTROPY:
                             # TODO: make this correct!
-                            if 'I am primary':
-                                primary_anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'])
+                            if i_am_primary:
+                                primary_anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.vv, self.vv)
                             else:
-                                anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'])
+                                anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.vv, self.vv)
                         elif line.action_type == CONNECT:
                             self.connections.add(line.server_index)
                         elif line.action_type == DISCONNECT:
