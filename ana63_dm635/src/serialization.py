@@ -23,13 +23,16 @@ def client_get(c_id, seq_no, song_name):
 # Client should call this to deserialize a message from a server. 
 class ClientDeserialize:
     def __init__(self, message):
-        self.action_type, self.song_name, self.url = message.split(':',2)
+        self.action_type, self.song_name, self.url = message.split('!',2)
+        if self.url != 'ERR_DEP':
+            self.url, self.vv = self.url.split('!', 1)
+            self.vv = literal_eval(self.vv)
 
 # Client should not call this!
 def client_message(c_id, seq_no, write_type, song_name, url):
-    message = '%s:%d:%d:%s:%s' % ('client', c_id, seq_no, write_type, song_name)
+    message = '%s!%d!%s!%s!%s' % ('client', c_id, seq_no, write_type, song_name)
     if url is not None:
-        message += ':%s' % url
+        message += '!%s' % url
     return message
 
 
@@ -47,15 +50,15 @@ def server_disconnect(s_index, s_id):
 def server_elect(s_index, s_id):
     return server_message(s_index, s_id, UR_ELECTED, None)
 
-def server_client_response(action_type, song_name, url):
-    return '%s:%s:%s' % (action_type, song_name, url)
+def server_client_response(action_type, song_name, url, vv):
+    return '%s!%s!%s!%s' % (action_type, song_name, url, vv)
 
 # Server should call this to serialize its logs to send to another server.
 def server_logs(s_index, s_id, log_com, log_ten):
     return server_message(s_index, s_id, ANTI_ENTROPY, {'committed': log_com, 'tentative': log_ten})
 
 def server_message(s_index, s_id, m_type, stuff):
-    message = '%s:%d:%s:%s' % ('server', s_index, s_id, m_type)
+    message = '%s!%d!%s!%s' % ('server', s_index, s_id, m_type)
     if stuff is not None:
         message += ':%s' % stuff
     return message
@@ -63,20 +66,20 @@ def server_message(s_index, s_id, m_type, stuff):
 # Call this to get an object representing the deserialized state of a message. 
 class ServerDeserialize:
     def __init__(self, message):
-        self.sender_type, rest = message.split(':',1)
+        self.sender_type, rest = message.split('!',1)
         if self.sender_type == 'client':
-            self.client_id, self.sequence_number, self.action_type, rest = rest.split(':',3)
+            self.client_id, self.vv, self.action_type, rest = rest.split('!',3)
             self.client_id = int(self.client_id)
-            self.sequence_number = int(self.sequence_number)
+            self.vv = literal_eval(self.vv)
             if self.action_type in [DELETE, GET]:
                 self.song_name = rest
             elif self.action_type in [ADD]:
-                self.song_name, self.URL = rest.split(':',1)
+                self.song_name, self.URL = rest.split('!',1)
         elif self.sender_type == 'server':
-            self.sender_index, self.sender_id, self.message_type = rest.split(':',2)
+            self.sender_index, self.sender_id, self.message_type = rest.split('!',2)
             self.sender_index = int(self.sender_index)
             if self.message_type not in [CONNECT, DISCONNECT, UR_ELECTED]:
-                self.message_type, rest = rest.split(':',3)[2:]
+                self.message_type, rest = rest.split('!',3)[2:]
                 if self.message_type == ANTI_ENTROPY:
                     self.logs = literal_eval(rest)
 
