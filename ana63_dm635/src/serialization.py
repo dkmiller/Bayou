@@ -77,7 +77,7 @@ class ServerDeserialize:
             if self.action_type in [DELETE, GET]:
                 self.song_name = rest
             elif self.action_type in [ADD]:
-                self.song_name, self.URL = rest.split('!',1)
+                self.song_name, self.url = rest.split('!',1)
         elif self.sender_type == 'server':
             self.sender_index, self.sender_id, self.action_type = rest.split('!',2)
             self.sender_index = int(self.sender_index)
