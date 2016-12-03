@@ -53,7 +53,6 @@ class ClientServerHandler(Thread):
         self.timer = timer
         self.valid = True
         self.vv = vv
-        LOG.debug('%d: server.ClientHandler(am_primary=%s)' % (self.index, self.am_primary))
 
     # Not thread-safe!
     def accept_stamp(self):
@@ -61,15 +60,14 @@ class ClientServerHandler(Thread):
         return (self.index, self.timer)
 
     def run(self):
-        LOG.debug('%d: server.ClientHandler.run()' % self.index)
         while self.valid:
             if '\n' in self.buffer:
                 (line, rest) = self.buffer.split('\n', 1)
                 self.buffer = rest
                 line = ServerDeserialize(line)
                 with self.global_lock:
-                    LOG.debug('%d: server.ClientServerHandler received %s' % (self.index, line.__dict__))
                     if line.sender_type == CLIENT:
+                        LOG.debug('%d: server.ClientServerHandler received %s' % (self.index, line.__dict__))
                         client_knows_too_much = False
                         for server in line.vv:
                             if server not in self.vv or self.vv[server] < line.vv[server]:
@@ -78,13 +76,17 @@ class ClientServerHandler(Thread):
                             sendClient(line.client_id, server_client_response(line.action_type, line.song_name, ERR_DEP, line.vv))
                         # Client doesn't know too much, so we can perform the requested action.
                         elif line.action_type == ADD:
-                            LOG.debug('%d: server.ClientServerHandler ADD' % self.index)
-                            self.log_entry(ADD, '%s,%s' % (line.song_name, line.url))
+                            op_value = '%s,%s' % (line.song_name, line.url)
+                            LOG.debug('%d: server.ClientServerHandler ADD(%s)' % (self.index, op_value))
+                            self.log_entry(ADD, op_value)
+                            LOG.debug('%d: server.ClientServerHandler ADD after log_entry' % self.index)
                             if self.index not in self.vv:
                                 self.vv[self.index] = 0
                             else:
                                 self.vv[self.index] += 1
+                            LOG.debug('%d: server.ClientServerHandler ADD before send' % self.index)
                             sendClient(line.client_id, server_client_response(line.action_type, line.song_name, line.url, self.vv))
+                            LOG.debug('%d: server.ClientServerHandler ADD end of if' % self.index)
                         elif line.action_type == DELETE:
                             self.log_entry(DELETE, line.song_name)
                             if self.index not in self.vv:
@@ -101,12 +103,10 @@ class ClientServerHandler(Thread):
                             sendClient(line.client_id, server_client_response(line.action_type, line.song_name, url, self.vv))
                     elif line.sender_type == SERVER:
                         if line.action_type == ANTI_ENTROPY:
-                            LOG.debug('%d: server.ClientServerHandler before anti-entropy' % self.index)
                             if self.am_primary:
                                 primary_anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.logs['vv'], self.vv)
                             else:
                                 anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.logs['vv'], self.vv)
-                            LOG.debug('%d: server.ClientServerHandler after anti-entropy' % self.index)
                         elif line.action_type == CONNECT:
                             self.connections.add(line.sender_index)
                         elif line.action_type == DISCONNECT:
@@ -120,11 +120,11 @@ class ClientServerHandler(Thread):
                 except:
                     self.valid = False
                     self.conn.close()
-                    LOG.debug('%d: server.ClientServerHandler closed connection' % self.index)
                     break
 
     # Not thread safe!
     def log_entry(self, op_type, op_value):
+        LOG.debug('   server.ClientServerHandler.log')
         if self.am_primary:
             log = self.log_com
         else:
@@ -211,19 +211,18 @@ def sendClient(c_id, message):
         sock.send(str(message) + '\n')
         sock.close()
     except Exception as msg:
-        LOG.debug('server send ERROR: ' + str(msg))
+        LOG.debug('   server.sendClient ERROR: ' + str(msg))
 
 # Send a message to a server.
 def sendServer(s_id, message):
     global address
-    LOG.debug('   server.send(%d, \'%s\')' % (s_id, message))
     try:
         sock = socket(AF_INET, SOCK_STREAM)
         sock.connect((address, 20000 + s_id))
         sock.send(str(message) + '\n')
         sock.close()
     except Exception as msg:
-        LOG.debug('server send ERROR: ' + str(msg))
+        LOG.debug('   server.sendServer ERROR: ' + str(msg))
 
 
 # Returns the version vector corresponding to a log.
@@ -260,7 +259,6 @@ def main():
 
     while True:
         # Initiate anti-entropy with all connections
-        LOG.debug('%d: server.main: connections = %s' % (index, connections))
         for pid in connections:
             sendServer(pid, server_logs(index, index, committed_log, tentative_log, vv))
         # Wait before conducting anti-entropy again.
