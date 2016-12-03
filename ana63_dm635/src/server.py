@@ -15,11 +15,13 @@ address = 'localhost'
 
 # Listens for messages from clients and servers.
 class ClientServerHandler(Thread):
-    def __init__(self, index, address, connections, log):
+    def __init__(self, index, address, connections, committed_log, tentative_log, am_primary):
         Thread.__init__(self)
+        self.am_primary = am_primary
         self.connections = connections
         self.index = index
-        self.log = log
+        self.log = tentative_log
+        self.log_com = committed_log
         self.sock = socket(AF_INET, SOCK_STREAM)
         self.sock.bind((address, 20000+self.index))
         self.sock.listen(1)
@@ -65,25 +67,23 @@ class ClientServerHandler(Thread):
                             sendClient(line.client_id, server_client_response(line.action_type, line.song_name, '', self.vv))
                         elif line.action_type == GET:
                             # TODO: write self.state()
-                            url = ''
+                            url = 'ERR_KEY'
                             state = self.state()
                             if line.song_name in state:
                                 url = state[line.song_name]
                             sendClient(line.client_id, server_client_response(line.action_type, line.song_name, url, self.vv))
                     elif line.sender_type == SERVER:
                         if line.action_type == ANTI_ENTROPY:
-                            # TODO: make this correct!
-                            if i_am_primary:
-                                primary_anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.vv, self.vv)
+                            if self.am_primary:
+                                primary_anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.logs['vv'], self.vv)
                             else:
-                                anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.vv, self.vv)
+                                anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.logs['vv'], self.vv)
                         elif line.action_type == CONNECT:
                             self.connections.add(line.server_index)
                         elif line.action_type == DISCONNECT:
                             self.connections.discard(line.server_index)
                         elif line.action_type == UR_ELECTED:
-                            # TODO: do something!
-                            pass
+                            self.am_primary = True
                 else:
                     try:
                         buff += conn.recv(1024)
@@ -93,11 +93,27 @@ class ClientServerHandler(Thread):
                         conn.close()
                         break
     def log_entry(self, op_type, op_value):
-        self.log.append({
+        if self.am_primary:
+            log = self.log_com
+        else:
+            log = self.log
+        log.append({
             'OP_TYPE': op_type,
             'OP_VALUE': op_value,
             'ACCT_STAMP': self.accept_stamp()
         })
+    def state(self):
+        result = {}
+        def update(st, log):
+            for log_entry in log:
+                if log_entry['OP_TYPE'] == 'PUT':
+                    song_name, url = log_entry['OP_VALUE'].split(',',1)
+                    st[song_name] = url
+                elif log_entry['OP_TYPE'] == 'DELETE':
+                    if log_entry['OP_VALUE'] in st:
+                        del st[log_entry['OP_VALUE']]
+        update(result, self.log_com)
+        update(result, self.log)
 
 # listens for messages from the master
 class MasterHandler(Thread):
@@ -205,7 +221,8 @@ def version_vector(log):
 def main():
     global address
     connections = set()
-    log = []
+    commited_log = []
+    tentative_log = []
 
     index = int(sys.argv[1])
     port = int(sys.argv[2])
@@ -216,17 +233,16 @@ def main():
     LOG.basicConfig(filename='LOG/%d.log' % index, level=LOG.DEBUG)
     LOG.debug('%d: server.main()' % index)
 
-    cshandler = ClientServerHandler(index, address, connections, log)
-    mhandler = MasterHandler(index, address, port, connections, log)
+    cshandler = ClientServerHandler(index, address, connections, committed_log, tentative_log, i_am_primary)
+    mhandler = MasterHandler(index, address, port, connections, committed_log, tentative_log)
     cshandler.start()
     mhandler.start()
     LOG.debug('%d: server.main: beginning while loop' % index)
 
     while True:
         # Initiate anti-entropy with all connections
-        message = '%d:anti-entropy:%s' % (index, version_vector(log))
         for pid in connections:
-            sendServer(pid, message)
+            sendServer(pid, server_logs(index, index, committed_log, tentative_log, cshandler.vv))
         # Wait before conducting anti-entropy again.
         sleep(uniform(.1,.3))
 

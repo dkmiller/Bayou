@@ -57,8 +57,8 @@ def server_client_response(action_type, song_name, url, vv):
     return '%s!%s!%s!%s' % (action_type, song_name, url, vv)
 
 # Server should call this to serialize its logs to send to another server.
-def server_logs(s_index, s_id, log_com, log_ten):
-    return server_message(s_index, s_id, ANTI_ENTROPY, {'committed': log_com, 'tentative': log_ten})
+def server_logs(s_index, s_id, log_com, log_ten, vv):
+    return server_message(s_index, s_id, ANTI_ENTROPY, {'committed': log_com, 'tentative': log_ten, 'vv': vv})
 
 def server_message(s_index, s_id, m_type, stuff):
     message = '%s!%d!%s!%s' % ('server', s_index, s_id, m_type)
