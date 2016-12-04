@@ -65,56 +65,57 @@ class ClientServerHandler(Thread):
                 (line, rest) = self.buffer.split('\n', 1)
                 self.buffer = rest
                 line = ServerDeserialize(line)
-                with self.global_lock:
-                    if line.sender_type == CLIENT:
-                        LOG.debug('%d: server.ClientServerHandler received %s' % (self.index, line.__dict__))
-                        client_knows_too_much = False
-                        LOG.debug('%d: server.ClientServerHandler FOOBAR my.vv = %s, cl.vv = %s' % (self.index, vv, line.vv))
-                        for server in line.vv:
-                            if server not in vv or vv[server] < line.vv[server]:
-                                client_knows_too_much = True
-                        if client_knows_too_much:
-                            sendClient(line.client_id, server_client_response(line.action_type, line.song_name, ERR_DEP, line.vv))
-                        # Client doesn't know too much, so we can perform the requested action.
-                        elif line.action_type == ADD:
-                            op_value = '%s,%s' % (line.song_name, line.url)
-                            self.log_entry('PUT', op_value)
-                            sendClient(line.client_id, server_client_response(line.action_type, line.song_name, line.url, vv))
-                        elif line.action_type == DELETE:
-                            self.log_entry('DELETE', line.song_name)
-                            sendClient(line.client_id, server_client_response(line.action_type, line.song_name, '', vv))
-                        elif line.action_type == GET:
-                            url = 'ERR_KEY'
-                            state = self.state()
-                            LOG.debug('%d: server.ClientServerHandler got GET state= %s' % (self.index, state))
-                            if line.song_name in state:
-                                url = state[line.song_name]
-                            sendClient(line.client_id, server_client_response(line.action_type, line.song_name, url, vv))
-                            LOG.debug('%d: server.ClientServerHandler got GET after send' % self.index)
-                    elif line.sender_type == SERVER:
-                        if line.action_type == ANTI_ENTROPY:
+                if line.sender_type == CLIENT:
+                    LOG.debug('%d: server.ClientServerHandler received %s' % (self.index, line.__dict__))
+                    client_knows_too_much = False
+                    LOG.debug('%d: server.ClientServerHandler FOOBAR my.vv = %s, cl.vv = %s' % (self.index, vv, line.vv))
+                    for server in line.vv:
+                        if server not in vv or vv[server] < line.vv[server]:
+                            client_knows_too_much = True
+                    if client_knows_too_much:
+                        sendClient(line.client_id, server_client_response(line.action_type, line.song_name, ERR_DEP, line.vv))
+                    # Client doesn't know too much, so we can perform the requested action.
+                    elif line.action_type == ADD:
+                        op_value = '%s,%s' % (line.song_name, line.url)
+                        self.log_entry('PUT', op_value)
+                        sendClient(line.client_id, server_client_response(line.action_type, line.song_name, line.url, vv))
+                    elif line.action_type == DELETE:
+                        self.log_entry('DELETE', line.song_name)
+                        sendClient(line.client_id, server_client_response(line.action_type, line.song_name, '', vv))
+                    elif line.action_type == GET:
+                        url = 'ERR_KEY'
+                        state = self.state()
+                        LOG.debug('%d: server.ClientServerHandler got GET state= %s' % (self.index, state))
+                        if line.song_name in state:
+                            url = state[line.song_name]
+                        sendClient(line.client_id, server_client_response(line.action_type, line.song_name, url, vv))
+                        LOG.debug('%d: server.ClientServerHandler got GET after send' % self.index)
+                elif line.sender_type == SERVER:
+                    if line.action_type == ANTI_ENTROPY:
+                        with self.global_lock:
                             if am_primary:
                                 primary_anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.logs['vv'], vv)
                             else:
                                 anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.logs['vv'], vv)
-                        elif line.action_type == CONNECT:
-                            self.connections.add(line.sender_index)
-                            LOG.debug('%d: server.ClientServerHandler first_time? line.logs = %s' % (self.index, line.logs))
-                            if line.logs['first_time']:
-                                # TODO: use recursive names if possible.
-                                self.log_entry('CREATE', line.sender_index)
-                            if first_time:
-                                sendServer(line.sender_index, server_connect(self.index, self.index, first_time))
-                                first_time = False
-                        elif line.action_type == DISCONNECT:
-                            self.connections.discard(line.sender_index)
-                        elif line.action_type == UR_ELECTED:
+                    elif line.action_type == CONNECT:
+                        self.connections.add(line.sender_index)
+                        LOG.debug('%d: server.ClientServerHandler first_time? line.logs = %s' % (self.index, line.logs))
+                        if line.logs['first_time']:
+                            # TODO: use recursive names if possible.
+                            self.log_entry('CREATE', line.sender_index)
+                        if first_time:
+                            sendServer(line.sender_index, server_connect(self.index, self.index, first_time))
+                            first_time = False
+                    elif line.action_type == DISCONNECT:
+                        self.connections.discard(line.sender_index)
+                    elif line.action_type == UR_ELECTED:
+                        with self.global_lock:
                             am_primary = True
                             # Commit everything you know.
                             for entry in self.log:
                                 self.log.remove(entry)
                                 self.log_com.append(entry)
-                            LOG.debug('%d: server.ClientServerHandler just elected am_primary = %s, com.log = %s, ten.log = %s' % (self.index, am_primary, self.log_com, self.log))
+                        LOG.debug('%d: server.ClientServerHandler just elected am_primary = %s, com.log = %s, ten.log = %s' % (self.index, am_primary, self.log_com, self.log))
             else:
                 try:
                     data = self.conn.recv(1024)
@@ -201,20 +202,22 @@ class MasterHandler(Thread):
                 self.buffer = rest
                 LOG.debug('%d: server.MasterHandler received \'%s\'' % (self.index, line))
                 line = line.split()
-                with self.global_lock:
-                    if 'createConn' == line[0]:
-                        s_ids = map(int, line[1:])
+                if 'createConn' == line[0]:
+                    s_ids = map(int, line[1:])
+                    with self.global_lock:
                         self.connections |= set(s_ids)
-                        LOG.debug('%d: server.MasterHandler: connections = %s' % (self.index, self.connections))
-                        for s_id in s_ids:
-                            sendServer(s_id, server_connect(self.index, self.index, first_time))
-                            first_time = False
-                    elif 'breakConn' == line[0]:
-                        s_ids = map(int, line[1:])
+                    LOG.debug('%d: server.MasterHandler: connections = %s' % (self.index, self.connections))
+                    for s_id in s_ids:
+                        sendServer(s_id, server_connect(self.index, self.index, first_time))
+                        first_time = False
+                elif 'breakConn' == line[0]:
+                    s_ids = map(int, line[1:])
+                    with self.global_lock:
                         self.connections -= set(s_ids)
-                        for s_id in s_ids:
-                            sendServer(s_id, server_disconnect(self.index, self.index))
-                    elif 'retire' == line[0]:
+                    for s_id in s_ids:
+                        sendServer(s_id, server_disconnect(self.index, self.index))
+                elif 'retire' == line[0]:
+                    with self.global_lock:
                         last_connection = self.connections.pop()
                         for s_id in self.connections:
                             sendServer(s_id, server_disconnect(self.index, self.index))
@@ -235,9 +238,10 @@ class MasterHandler(Thread):
                         sendServer(last_connection, server_disconnect(self.index, self.index))
                         LOG.debug('%d: server.MasterHandler: after retire am_primary = %s' % (self.index, am_primary))
                         os._exit()
-                    elif 'printLog' == line[0]:
+                elif 'printLog' == line[0]:
+                    with self.global_lock:
                         msg = print_logs(self.log_com, self.log)
-                        self.send(msg)
+                    self.send(msg)
             else:
                 try:
                     data = self.conn.recv(1024)
