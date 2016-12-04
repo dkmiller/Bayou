@@ -15,9 +15,10 @@ address = 'localhost'
 am_primary = False
 first_time = True
 timer = -1
+vv = {}
 
 class WorkerThread(Thread):
-    def __init__(self, address, index, port, connections, global_lock, committed_log, tentative_log, vv):
+    def __init__(self, address, index, port, connections, global_lock, committed_log, tentative_log):
         Thread.__init__(self)
         self.address = address
         self.index = index
@@ -26,7 +27,6 @@ class WorkerThread(Thread):
         self.global_lock = global_lock
         self.committed_log = committed_log
         self.tentative_log = tentative_log
-        self.vv = vv
 
         self.sock = socket(AF_INET, SOCK_STREAM)
         self.sock.bind((address, 20000+index))
@@ -35,13 +35,13 @@ class WorkerThread(Thread):
     def run(self):
         while True:
             conn, addr = self.sock.accept()
-            handler = ClientServerHandler(conn, self.index, self.connections, self.global_lock, self.committed_log, self.tentative_log, self.vv)
+            handler = ClientServerHandler(conn, self.index, self.connections, self.global_lock, self.committed_log, self.tentative_log)
             handler.start()
 
 
 # Listens for messages from clients and servers.
 class ClientServerHandler(Thread):
-    def __init__(self, conn, index, connections, global_lock, committed_log, tentative_log, vv):
+    def __init__(self, conn, index, connections, global_lock, committed_log, tentative_log):
         Thread.__init__(self)
         self.buffer = ''
         self.conn = conn
@@ -51,7 +51,6 @@ class ClientServerHandler(Thread):
         self.log = tentative_log
         self.log_com = committed_log
         self.valid = True
-        self.vv = vv
 
     # Not thread-safe!
     def accept_stamp(self):
@@ -60,7 +59,7 @@ class ClientServerHandler(Thread):
         return (self.index, timer)
 
     def run(self):
-        global am_primary, first_time
+        global am_primary, first_time, vv
         while self.valid:
             if '\n' in self.buffer:
                 (line, rest) = self.buffer.split('\n', 1)
@@ -70,9 +69,9 @@ class ClientServerHandler(Thread):
                     if line.sender_type == CLIENT:
                         LOG.debug('%d: server.ClientServerHandler received %s' % (self.index, line.__dict__))
                         client_knows_too_much = False
-                        LOG.debug('%d: server.ClientServerHandler FOOBAR my.vv = %s, cl.vv = %s' % (self.index, self.vv, line.vv))
+                        LOG.debug('%d: server.ClientServerHandler FOOBAR my.vv = %s, cl.vv = %s' % (self.index, vv, line.vv))
                         for server in line.vv:
-                            if server not in self.vv or self.vv[server] < line.vv[server]:
+                            if server not in vv or vv[server] < line.vv[server]:
                                 client_knows_too_much = True
                         if client_knows_too_much:
                             sendClient(line.client_id, server_client_response(line.action_type, line.song_name, ERR_DEP, line.vv))
@@ -80,32 +79,24 @@ class ClientServerHandler(Thread):
                         elif line.action_type == ADD:
                             op_value = '%s,%s' % (line.song_name, line.url)
                             self.log_entry('PUT', op_value)
-                            if self.index not in self.vv:
-                                self.vv[self.index] = 0
-                            else:
-                                self.vv[self.index] += 1
-                            sendClient(line.client_id, server_client_response(line.action_type, line.song_name, line.url, self.vv))
+                            sendClient(line.client_id, server_client_response(line.action_type, line.song_name, line.url, vv))
                         elif line.action_type == DELETE:
                             self.log_entry('DELETE', line.song_name)
-                            if self.index not in self.vv:
-                                self.vv[self.index] = 0
-                            else:
-                                self.vv[self.index] += 1
-                            sendClient(line.client_id, server_client_response(line.action_type, line.song_name, '', self.vv))
+                            sendClient(line.client_id, server_client_response(line.action_type, line.song_name, '', vv))
                         elif line.action_type == GET:
                             url = 'ERR_KEY'
                             state = self.state()
                             LOG.debug('%d: server.ClientServerHandler got GET state= %s' % (self.index, state))
                             if line.song_name in state:
                                 url = state[line.song_name]
-                            sendClient(line.client_id, server_client_response(line.action_type, line.song_name, url, self.vv))
+                            sendClient(line.client_id, server_client_response(line.action_type, line.song_name, url, vv))
                             LOG.debug('%d: server.ClientServerHandler got GET after send' % self.index)
                     elif line.sender_type == SERVER:
                         if line.action_type == ANTI_ENTROPY:
                             if am_primary:
-                                primary_anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.logs['vv'], self.vv)
+                                primary_anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.logs['vv'], vv)
                             else:
-                                anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.logs['vv'], self.vv)
+                                anti_entropy(self.log_com, self.log, line.logs['committed'], line.logs['tentative'], line.logs['vv'], vv)
                         elif line.action_type == CONNECT:
                             self.connections.add(line.sender_index)
                             LOG.debug('%d: server.ClientServerHandler first_time? line.logs = %s' % (self.index, line.logs))
@@ -135,12 +126,16 @@ class ClientServerHandler(Thread):
 
     # Not thread safe!
     def log_entry(self, op_type, op_value):
-        global am_primary
+        global am_primary, vv
         LOG.debug('   server.ClientServerHandler.log_entry(%s,%s)' % (op_type, op_value))
         if am_primary:
             log = self.log_com
         else:
             log = self.log
+        if self.index in vv:
+            vv[self.index] += 1
+        else:
+            vv[self.index] = 0
         log.append({
             'OP_TYPE': op_type,
             'OP_VALUE': op_value,
@@ -177,7 +172,7 @@ def update(st, log):
 
 # listens for messages from the master
 class MasterHandler(Thread):
-    def __init__(self, index, address, port, connections, global_lock, log_com, log, vv):
+    def __init__(self, index, address, port, connections, global_lock, log_com, log):
         Thread.__init__(self)
         self.buffer = ''
         self.connections = connections
@@ -190,12 +185,11 @@ class MasterHandler(Thread):
         self.sock.listen(1)
         self.conn, self.addr = self.sock.accept()
         self.valid = True
-        self.vv = vv
 
         LOG.debug('%d: server.MasterHandler()' % self.index)
 
     def run(self):
-        global am_primary, first_time, timer
+        global am_primary, first_time, timer, vv
         while self.valid:
             if '\n' in self.buffer:
                 (line, rest) = self.buffer.split('\n', 1)
@@ -225,7 +219,11 @@ class MasterHandler(Thread):
                         else:
                             log = self.log
                         log.append({'OP_TYPE': 'RETIRE', 'OP_VALUE': self.index, 'ACCT_STAMP': (self.index, timer)})
-                        sendServer(last_connection, server_logs(self.index, self.index, self.log_com, self.log, self.vv))
+                        if self.index in vv:
+                            vv[self.index] += 1
+                        else:
+                            vv[self.index] = 0
+                        sendServer(last_connection, server_logs(self.index, self.index, self.log_com, self.log, vv))
                         if am_primary:
                             sendServer(last_connection, server_elect(self.index, self.index))
                             am_primary = False
@@ -280,7 +278,7 @@ def version_vector(log):
     return result
 
 def main():
-    global address, am_primary, first_time
+    global address, am_primary, first_time, vv
     connections = set()
     global_lock = Lock()
     committed_log = []
@@ -298,8 +296,8 @@ def main():
     LOG.basicConfig(filename='LOG/%d.log' % index, level=LOG.DEBUG)
     LOG.debug('%d: server.main()' % index)
 
-    wthread = WorkerThread(address, index, port, connections, global_lock, committed_log, tentative_log, vv)
-    mhandler = MasterHandler(index, address, port, connections, global_lock, committed_log, tentative_log, vv)
+    wthread = WorkerThread(address, index, port, connections, global_lock, committed_log, tentative_log)
+    mhandler = MasterHandler(index, address, port, connections, global_lock, committed_log, tentative_log)
     wthread.start()
     mhandler.start()
     LOG.debug('%d: server.main: beginning while loop' % index)
