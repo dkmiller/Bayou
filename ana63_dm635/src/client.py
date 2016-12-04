@@ -1,3 +1,4 @@
+from entropy import *
 import logging as LOG
 from Queue import Queue
 from socket import AF_INET, socket, SOCK_STREAM
@@ -114,14 +115,15 @@ def server_logic(line, client_vv, index):
     if line.url == ERR_DEP:
         if line.action_type == GET:
             # send msg to master
-            send(-1, line.url)
+            msg = 'getResp %s:%s' % (line.song_name, line.url)
+            send(-1, msg)
     # operation successful
     else:
         if line.action_type in [ADD, DELETE]:
-            client_vv = line.vv
+            compute_vv(client_vv, line.vv)
         elif line.action_type == GET:
             # send msg to master
-            client_vv = line.vv
+            compute_vv(client_vv, line.vv)
             msg = 'getResp %s:%s' % (line.song_name, line.url)
             LOG.debug('   client.server_logic about to send \'%s\'' % msg)
             send(-1,msg)

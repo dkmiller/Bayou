@@ -71,6 +71,7 @@ class ClientServerHandler(Thread):
                     if line.sender_type == CLIENT:
                         LOG.debug('%d: server.ClientServerHandler received %s' % (self.index, line.__dict__))
                         client_knows_too_much = False
+                        LOG.debug('%d: server.ClientServerHandler FOOBAR my.vv = %s, cl.vv = %s' % (self.index, self.vv, line.vv))
                         for server in line.vv:
                             if server not in self.vv or self.vv[server] < line.vv[server]:
                                 client_knows_too_much = True
