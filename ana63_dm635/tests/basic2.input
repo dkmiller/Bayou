@@ -1,6 +1,0 @@
-0 startServer 15000
-1 startServer 15001
-2 startServer 15002
-3 startClient 15003
-0 createConn 1
-1 createConn 2

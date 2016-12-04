@@ -150,6 +150,11 @@ class ClientServerHandler(Thread):
         return result
 
 def print_logs(committed_log, tentative_log):
+    # correct stuff
+    for entry in committed_log:
+        if entry in tentative_log:
+            tentative_log.remove(entry)
+
     result = 'log '
     for entry in committed_log:
         result += '%s:(%s):%s' % (entry['OP_TYPE'], entry['OP_VALUE'], 'TRUE')
